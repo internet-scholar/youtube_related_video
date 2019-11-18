@@ -9,6 +9,7 @@ import boto3
 import argparse
 import time
 from googleapiclient.errors import HttpError
+from datetime import date, timedelta
 
 
 CREATE_VIDEO_RELATED_JSON = """
@@ -37,29 +38,22 @@ TBLPROPERTIES ('has_encrypted_data'='false')
 
 TRENDING_VIDEOS = """
 select
-  youtube.id as id,
-  youtube.snippet.title as title,
-  youtube.snippet.channelId as channel_id,
-  youtube.snippet.channelTitle as channel_title,
+  url_extract_parameter(validated_url.validated_url, 'v') as id,
   count(distinct twitter.user.id) as mentions
 from
   twitter_stream as twitter,
   unnest(twitter.entities.urls) t(tweet_url),
-  validated_url,
-  youtube_video_snippet as youtube
+  validated_url
 where
-  twitter.creation_date = cast(current_date - interval '1' day as varchar) and
+  twitter.creation_date = '{creation_date}' and
   validated_url.url = tweet_url.expanded_url and
-  url_extract_host(validated_url.validated_url) = 'www.youtube.com' and
-  url_extract_parameter(validated_url.validated_url, 'v') = youtube.id
+  url_extract_host(validated_url.validated_url) = 'www.youtube.com'
 group by
-  youtube.id,
-  youtube.snippet.title,
-  youtube.snippet.channelId,
-  youtube.snippet.channelTitle
+  url_extract_parameter(validated_url.validated_url, 'v')
 order by
-  mentions desc
-limit {};
+  mentions desc,
+  id asc
+limit {number_of_videos};
 """
 
 
@@ -74,13 +68,23 @@ class YoutubeRelatedVideo:
         self.s3_admin = s3_admin
         self.s3_data = s3_data
 
-    def collect_related_video(self, region_code):
+    def collect_related_video(self, region_code, creation_date=None):
         athena_db = AthenaDatabase(database=self.athena_data, s3_output=self.s3_admin)
 
         trending_filename = Path(Path(__file__).parent, 'tmp', 'trending.csv')
         Path(trending_filename).parent.mkdir(parents=True, exist_ok=True)
+
+        if creation_date is None:
+            query_string = TRENDING_VIDEOS.format(
+                creation_date=(date.today() - timedelta(days=2)).strftime("%Y-%m-%d"),
+                number_of_videos=self.NUMBER_OF_VIDEOS)
+        else:
+            query_string = TRENDING_VIDEOS.format(
+                creation_date=(datetime.strptime(creation_date, '%Y-%m-%d') - timedelta(days=2)).strftime("%Y-%m-%d"),
+                number_of_videos=self.NUMBER_OF_VIDEOS)
+
         trending_videos = athena_db.query_athena_and_download(
-            query_string=TRENDING_VIDEOS.format(self.NUMBER_OF_VIDEOS),
+            query_string=query_string,
             filename=trending_filename)
 
         with open(trending_videos, newline='', encoding="utf8") as csv_reader:
@@ -95,16 +99,24 @@ class YoutubeRelatedVideo:
                                                           developerKey=self.credentials[current_key]['developer_key'],
                                                           cache_discovery=False)
                 num_videos = 0
+                if creation_date is None:
+                    max_results = self.NUMBER_OF_RELATED_VIDEOS
+                    part = 'id'
+                else:
+                    part = 'snippet'
+                    max_results = self.NUMBER_OF_RELATED_VIDEOS * 3
+                    if max_results > 50:
+                        max_results = 50
                 for trending_video in reader:
                     service_unavailable = 0
                     no_response = True
                     while no_response:
                         try:
-                            response = youtube.search().list(part="id",
+                            response = youtube.search().list(part=part,
                                                              type='video',
                                                              regionCode=region_code,
                                                              relatedToVideoId=trending_video['id'],
-                                                             maxResults=self.NUMBER_OF_RELATED_VIDEOS).execute()
+                                                             maxResults=max_results).execute()
                             no_response = False
                         except HttpError as e:
                             if "403" in str(e):
@@ -136,17 +148,30 @@ class YoutubeRelatedVideo:
                         item['relatedToVideoId'] = trending_video['id']
                         item['retrieved_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                         item['rank'] = rank
-                        rank = rank + 1
-                        num_videos = num_videos + 1
-                        json_writer.write("{}\n".format(json.dumps(item)))
+                        if creation_date is None:
+                            rank = rank + 1
+                            num_videos = num_videos + 1
+                            json_writer.write("{}\n".format(json.dumps(item)))
+                        else:
+                            item['snippet']['publishedAt'] = item['snippet']['publishedAt'].rstrip('Z').replace('T', ' ')
+                            if rank <= self.NUMBER_OF_RELATED_VIDEOS:
+                                if item['snippet']['publishedAt'] <= creation_date + ' 00:00:00.000':
+                                    rank = rank + 1
+                                    num_videos = num_videos + 1
+                                    json_writer.write("{}\n".format(json.dumps(item)))
 
         logging.info("Compress file %s", output_json)
         compressed_file = compress(filename=output_json, delete_original=True)
 
         s3 = boto3.resource('s3')
-        s3_filename = "youtube_related_video/creation_date={today}/{num_videos}.json.bz2".format(
-            today=datetime.utcnow().strftime("%Y-%m-%d"),
-            num_videos=num_videos)
+        if creation_date is None:
+            s3_filename = "youtube_related_video/creation_date={creation_date}/{num_videos}.json.bz2".format(
+                creation_date=datetime.utcnow().strftime("%Y-%m-%d"),
+                num_videos=num_videos)
+        else:
+            s3_filename = "youtube_related_video/creation_date={creation_date}/{num_videos}.json.bz2".format(
+                creation_date=creation_date,
+                num_videos=num_videos)
         logging.info("Upload file %s to bucket %s at %s", compressed_file, self.s3_data, s3_filename)
         s3.Bucket(self.s3_data).upload_file(str(compressed_file), s3_filename)
 
@@ -161,6 +186,7 @@ class YoutubeRelatedVideo:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='S3 Bucket with configuration', required=True)
+    parser.add_argument('--creation_date', help='If not specified, creation_date will be the day before yesterday')
     args = parser.parse_args()
 
     config = read_dict_from_s3_url(url=args.config)
@@ -172,7 +198,8 @@ def main():
                                                     athena_data=config['aws']['athena-data'],
                                                     s3_admin=config['aws']['s3-admin'],
                                                     s3_data=config['aws']['s3-data'])
-        youtube_related_video.collect_related_video(region_code=config['parameter']['region_code'])
+        youtube_related_video.collect_related_video(region_code=config['parameter']['region_code'],
+                                                    creation_date=args.creation_date)
     finally:
         logger.save_to_s3()
         logger.recreate_athena_table()
