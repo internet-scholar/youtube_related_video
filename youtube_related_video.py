@@ -62,6 +62,7 @@ class YoutubeRelatedVideo:
     WAIT_WHEN_SERVICE_UNAVAILABLE = 30
     NUMBER_OF_VIDEOS = 50
     NUMBER_OF_RELATED_VIDEOS = 10
+    NUMBER_OF_DAYS = 2
 
     def __init__(self, credentials, athena_data, s3_admin, s3_data):
         self.credentials = credentials
@@ -77,11 +78,11 @@ class YoutubeRelatedVideo:
 
         if creation_date is None:
             query_string = TRENDING_VIDEOS.format(
-                creation_date=(date.today() - timedelta(days=2)).strftime("%Y-%m-%d"),
+                creation_date=(date.today() - timedelta(days=self.NUMBER_OF_DAYS)).strftime("%Y-%m-%d"),
                 number_of_videos=self.NUMBER_OF_VIDEOS)
         else:
             query_string = TRENDING_VIDEOS.format(
-                creation_date=(datetime.strptime(creation_date, '%Y-%m-%d') - timedelta(days=2)).strftime("%Y-%m-%d"),
+                creation_date=(datetime.strptime(creation_date, '%Y-%m-%d') - timedelta(days=self.NUMBER_OF_DAYS)).strftime("%Y-%m-%d"),
                 number_of_videos=self.NUMBER_OF_VIDEOS)
 
         trending_videos = athena_db.query_athena_and_download(
