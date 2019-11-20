@@ -47,7 +47,8 @@ from
 where
   twitter.creation_date = '{creation_date}' and
   validated_url.url = tweet_url.expanded_url and
-  url_extract_host(validated_url.validated_url) = 'www.youtube.com'
+  url_extract_host(validated_url.validated_url) = 'www.youtube.com' and
+  url_extract_parameter(validated_url.validated_url, 'v') is not null
 group by
   url_extract_parameter(validated_url.validated_url, 'v')
 order by
