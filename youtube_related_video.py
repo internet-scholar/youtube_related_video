@@ -135,6 +135,12 @@ class YoutubeRelatedVideo:
                                                                               self.credentials[current_key][
                                                                                   'developer_key'],
                                                                               cache_discovery=False)
+                            elif "Backend Error" in str(e):
+                                # Backend errors are usually associated to getting
+                                # recommended videos for a video that was deleted by the user.
+                                # In that case, just move on.
+                                logging.info("Backend error. Video %s will be ignored", trending_video['id'])
+                                no_response = False
                             elif "503" in str(e):
                                 logging.info("Service unavailable")
                                 service_unavailable = service_unavailable + 1
