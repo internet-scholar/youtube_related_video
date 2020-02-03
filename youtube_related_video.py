@@ -10,6 +10,8 @@ import argparse
 import time
 from googleapiclient.errors import HttpError
 from datetime import date, timedelta
+from socket import error as SocketError
+import errno
 
 
 CREATE_VIDEO_RELATED_JSON = """
@@ -60,6 +62,7 @@ limit {number_of_videos};
 
 class YoutubeRelatedVideo:
     WAIT_WHEN_SERVICE_UNAVAILABLE = 30
+    WAIT_WHEN_CONNECTION_RESET_BY_PEER = 60
     NUMBER_OF_VIDEOS = 50
     NUMBER_OF_RELATED_VIDEOS = 10
     NUMBER_OF_DAYS = 2
@@ -111,6 +114,7 @@ class YoutubeRelatedVideo:
                         max_results = 50
                 for trending_video in reader:
                     service_unavailable = 0
+                    connection_reset_by_peer = 0
                     no_response = True
                     while no_response:
                         try:
@@ -120,6 +124,21 @@ class YoutubeRelatedVideo:
                                                              relatedToVideoId=trending_video['id'],
                                                              maxResults=max_results).execute()
                             no_response = False
+                        except SocketError as e:
+                            if e.errno != errno.ECONNRESET:
+                                raise
+                            else:
+                                connection_reset_by_peer = connection_reset_by_peer + 1
+                                if connection_reset_by_peer <= 10:
+                                    time.sleep(secs=self.WAIT_WHEN_CONNECTION_RESET_BY_PEER)
+                                    youtube = googleapiclient.discovery.build(serviceName="youtube",
+                                                                              version="v3",
+                                                                              developerKey=
+                                                                              self.credentials[current_key][
+                                                                                  'developer_key'],
+                                                                              cache_discovery=False)
+                                else:
+                                    raise
                         except HttpError as e:
                             if "403" in str(e):
                                 logging.info("Invalid {} developer key: {}".format(
@@ -140,6 +159,12 @@ class YoutubeRelatedVideo:
                                 # recommended videos for a video that was deleted by the user.
                                 # In that case, just move on.
                                 logging.info("Backend error. Video %s will be ignored", trending_video['id'])
+                                no_response = False
+                            elif "Not Found" in str(e):
+                                # Backend errors are usually associated to getting
+                                # recommended videos for a video that was deleted by the user.
+                                # In that case, just move on.
+                                logging.info("Not Found error. Video %s will be ignored", trending_video['id'])
                                 no_response = False
                             elif "503" in str(e):
                                 logging.info("Service unavailable")
