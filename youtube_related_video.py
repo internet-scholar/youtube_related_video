@@ -132,7 +132,7 @@ class YoutubeRelatedVideo:
                                 connection_reset_by_peer = connection_reset_by_peer + 1
                                 logging.info("Connection reset by peer! {}".format(connection_reset_by_peer))
                                 if connection_reset_by_peer <= 10:
-                                    time.sleep(secs=self.WAIT_WHEN_CONNECTION_RESET_BY_PEER)
+                                    time.sleep(self.WAIT_WHEN_CONNECTION_RESET_BY_PEER)
                                     youtube = googleapiclient.discovery.build(serviceName="youtube",
                                                                               version="v3",
                                                                               developerKey=
