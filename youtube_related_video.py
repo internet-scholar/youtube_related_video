@@ -237,7 +237,7 @@ def main():
                                                     creation_date=args.creation_date)
     finally:
         logger.save_to_s3()
-        logger.recreate_athena_table()
+        #logger.recreate_athena_table()
 
 
 if __name__ == '__main__':
