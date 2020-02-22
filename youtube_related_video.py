@@ -1,4 +1,5 @@
 from pathlib import Path
+import random
 import csv
 from internet_scholar import AthenaDatabase, read_dict_from_s3_url, AthenaLogger, compress
 import googleapiclient.discovery
@@ -69,6 +70,7 @@ class YoutubeRelatedVideo:
 
     def __init__(self, credentials, athena_data, s3_admin, s3_data):
         self.credentials = credentials
+        random.shuffle(self.credentials)
         self.athena_data = athena_data
         self.s3_admin = s3_admin
         self.s3_data = s3_data
