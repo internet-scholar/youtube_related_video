@@ -171,6 +171,10 @@ class YoutubeRelatedVideo:
                                 # In that case, just move on.
                                 logging.info("Not Found error. Video %s will be ignored", trending_video['id'])
                                 no_response = False
+                            elif "404" in str(e):
+                                logging.info("Requested entity was not found. Video %s will be ignored",
+                                             trending_video['id'])
+                                no_response = False
                             elif "503" in str(e):
                                 logging.info("Service unavailable")
                                 service_unavailable = service_unavailable + 1
