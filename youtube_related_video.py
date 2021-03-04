@@ -141,12 +141,21 @@ class YoutubeRelatedVideo:
                                 logging.info("Connection reset by peer! {}".format(connection_reset_by_peer))
                                 if connection_reset_by_peer <= 10:
                                     time.sleep(self.WAIT_WHEN_CONNECTION_RESET_BY_PEER)
-                                    youtube = googleapiclient.discovery.build(serviceName="youtube",
-                                                                              version="v3",
-                                                                              developerKey=
-                                                                              self.credentials[current_key][
-                                                                                  'developer_key'],
-                                                                              cache_discovery=False)
+                                    try:
+                                        youtube = googleapiclient.discovery.build(serviceName="youtube",
+                                                                                  version="v3",
+                                                                                  developerKey=
+                                                                                  self.credentials[current_key][
+                                                                                      'developer_key'],
+                                                                                  cache_discovery=False)
+                                    except UnknownApiNameOrVersion as e:
+                                        service = read_dict_from_url(
+                                            url="https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest")
+                                        youtube = googleapiclient.discovery.build_from_document(service=service,
+                                                                                                developerKey=
+                                                                                                self.credentials[
+                                                                                                    current_key][
+                                                                                                    'developer_key'])
                                 else:
                                     raise
                         except HttpError as e:
@@ -158,12 +167,21 @@ class YoutubeRelatedVideo:
                                 if current_key >= len(self.credentials):
                                     raise
                                 else:
-                                    youtube = googleapiclient.discovery.build(serviceName="youtube",
-                                                                              version="v3",
-                                                                              developerKey=
-                                                                              self.credentials[current_key][
-                                                                                  'developer_key'],
-                                                                              cache_discovery=False)
+                                    try:
+                                        youtube = googleapiclient.discovery.build(serviceName="youtube",
+                                                                                  version="v3",
+                                                                                  developerKey=
+                                                                                  self.credentials[current_key][
+                                                                                      'developer_key'],
+                                                                                  cache_discovery=False)
+                                    except UnknownApiNameOrVersion as e:
+                                        service = read_dict_from_url(
+                                            url="https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest")
+                                        youtube = googleapiclient.discovery.build_from_document(service=service,
+                                                                                                developerKey=
+                                                                                                self.credentials[
+                                                                                                    current_key][
+                                                                                                    'developer_key'])
                             elif "Backend Error" in str(e):
                                 # Backend errors are usually associated to getting
                                 # recommended videos for a video that was deleted by the user.
