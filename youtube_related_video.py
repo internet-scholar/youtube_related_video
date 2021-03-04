@@ -1,7 +1,7 @@
 from pathlib import Path
 import random
 import csv
-from internet_scholar import AthenaDatabase, read_dict_from_s3_url, AthenaLogger, compress
+from internet_scholar import AthenaDatabase, read_dict_from_s3_url, AthenaLogger, compress, read_dict_from_url
 import googleapiclient.discovery
 import logging
 import json
@@ -9,7 +9,7 @@ from datetime import datetime
 import boto3
 import argparse
 import time
-from googleapiclient.errors import HttpError
+from googleapiclient.errors import HttpError, UnknownApiNameOrVersion
 from datetime import date, timedelta
 from socket import error as SocketError
 import errno
@@ -101,10 +101,15 @@ class YoutubeRelatedVideo:
             with open(output_json, 'w') as json_writer:
                 reader = csv.DictReader(csv_reader)
                 current_key = 0
-                youtube = googleapiclient.discovery.build(serviceName="youtube",
-                                                          version="v3",
-                                                          developerKey=self.credentials[current_key]['developer_key'],
-                                                          cache_discovery=False)
+                try:
+                    youtube = googleapiclient.discovery.build(serviceName="youtube",
+                                                              version="v3",
+                                                              developerKey=self.credentials[current_key]['developer_key'],
+                                                              cache_discovery=False)
+                except UnknownApiNameOrVersion as e:
+                    service = read_dict_from_url(url="https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest")
+                    youtube = googleapiclient.discovery.build_from_document(service=service,
+                                                                            developerKey=self.credentials[current_key]['developer_key'])
                 num_videos = 0
                 if creation_date is None:
                     max_results = self.NUMBER_OF_RELATED_VIDEOS
