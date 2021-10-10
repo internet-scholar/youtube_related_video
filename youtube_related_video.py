@@ -198,6 +198,10 @@ class YoutubeRelatedVideo:
                                 logging.info("Requested entity was not found. Video %s will be ignored",
                                              trending_video['id'])
                                 no_response = False
+                            elif "400" in str(e):
+                                logging.info("Invalid argument. Video %s will be ignored",
+                                             trending_video['id'])
+                                no_response = False
                             elif "503" in str(e):
                                 logging.info("Service unavailable")
                                 service_unavailable = service_unavailable + 1
