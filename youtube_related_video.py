@@ -214,20 +214,21 @@ class YoutubeRelatedVideo:
 
                     rank = 1
                     for item in response.get('items', {}):
-                        item['relatedToVideoId'] = trending_video['id']
-                        item['retrieved_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                        item['rank'] = rank
-                        if creation_date is None:
-                            rank = rank + 1
-                            num_videos = num_videos + 1
-                            json_writer.write("{}\n".format(json.dumps(item)))
-                        else:
-                            item['snippet']['publishedAt'] = item['snippet']['publishedAt'].rstrip('Z').replace('T', ' ')
-                            if rank <= self.NUMBER_OF_RELATED_VIDEOS:
-                                if item['snippet']['publishedAt'] <= creation_date + ' 00:00:00.000':
-                                    rank = rank + 1
-                                    num_videos = num_videos + 1
-                                    json_writer.write("{}\n".format(json.dumps(item)))
+                        if 'snippet' in item.keys():
+                            item['relatedToVideoId'] = trending_video['id']
+                            item['retrieved_at'] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                            item['rank'] = rank
+                            if creation_date is None:
+                                rank = rank + 1
+                                num_videos = num_videos + 1
+                                json_writer.write("{}\n".format(json.dumps(item)))
+                            else:
+                                item['snippet']['publishedAt'] = item['snippet']['publishedAt'].rstrip('Z').replace('T', ' ')
+                                if rank <= self.NUMBER_OF_RELATED_VIDEOS:
+                                    if item['snippet']['publishedAt'] <= creation_date + ' 00:00:00.000':
+                                        rank = rank + 1
+                                        num_videos = num_videos + 1
+                                        json_writer.write("{}\n".format(json.dumps(item)))
 
         logging.info("Compress file %s", output_json)
         compressed_file = compress(filename=output_json, delete_original=True)
